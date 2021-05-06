@@ -1,52 +1,69 @@
-const minimist = require("minimist");
-const chalk = require("chalk");
+const EventEmmiter = require("events");
+const emmiter = new EventEmmiter();
+const dateParser = require("./dateParser");
+const yargs = require("yargs");
 
-const arguments = minimist(process.argv.slice(2), {
-  string: ["number"],
-  alias: {
-    number: "n",
-  },
+const args = yargs.usage("Usage: -t or --timer").option("t", {
+  alias: "timers",
+  describe: "Array of timers to set",
+  type: "array",
+  demandOption: true,
+}).argv;
+
+const datePrettier = new Intl.DateTimeFormat("ru", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
 });
 
-if (!parseInt(arguments.number)) throw new Error("argument must be a number");
+const validatedTimers = [];
 
-
-// Using Sieve of Eratosthenes to find prime numbers
-const getPrimeNumbers = (num) => {
-  const primeNumbers = [];
-  const trash = []; // trash[not prime number] === true, ex. trash[4] = true, trash[7] = undefined
-
-  for (let i = 2; i <= num; i++) {
-    if (!trash[i]) {
-      primeNumbers.push(i);
-
-      for (let j = i * i; j <= num; j += i) {
-        trash[j] = true;
-      }
+// Parsing and validating dates from arguments
+args.timers.forEach((item) => {
+    if (new Date() > dateParser(item)) {
+      console.warn(
+        `${datePrettier.format(
+          dateParser(item)
+        )}\nDate can't be less then current. Timer willn't be set!`
+      );
+    } else {
+  validatedTimers.push(dateParser(item));
     }
-  }
-  return primeNumbers;
+});
+
+const getCountdown = (finishDate) => {
+  const difference = finishDate - new Date();
+  const hours = difference / 36e5;
+  const minutes = (hours % 1) * 60;
+  const seconds = (minutes % 1) * 60;
+  const twoDigitForamatter = (number) =>
+    number > 0 && number < 10 ? `0${number}` : number;
+
+  return `${twoDigitForamatter(Math.floor(hours))}:${twoDigitForamatter(
+    Math.abs(Math.floor(minutes))
+  )}:${twoDigitForamatter(Math.abs(Math.floor(seconds)))}`;
 };
 
-const primes = getPrimeNumbers(arguments.number);
-
-if (primes.length === 0) {
-  console.error(
-    chalk.red(`Prime numbers not found in range ${arguments.number}!`)
-  );
-}
-
-const colorfulLogger = (numArr) => {
-  const colors = [chalk.green, chalk.yellow, chalk.blue];
-  let res = "";
-
-  for (let i = 0, j = 0; i < numArr.length; i++, j++) {
-    if (j > colors.length - 1) j = 0;
-
-    res += `${colors[j](numArr[i])}, `;
-  }
-
-  console.log(res);
+const renderTimers = (arr) => {
+  console.clear();
+  validatedTimers.forEach((date) => {
+    if (new Date() > date) {
+      emmiter.emit("timerDone", date);
+    } else {
+      console.log(`${getCountdown(date)} until ${datePrettier.format(date)}`);
+    }
+  });
 };
 
-colorfulLogger(primes);
+emmiter.on("timerDone", (date) =>
+  console.log(`Timer done: ${datePrettier.format(date)}`)
+);
+
+setTimeout(() => {
+    setInterval(() => {
+        renderTimers(validatedTimers);
+      }, 1000);
+}, 5000);
